@@ -1,199 +1,242 @@
 <?php
 session_start();
+
+// 1. SEGURIDAD
 if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
     header("location:../login.php");
     exit();
 }
+
 require '../constants/db_config.php';
 
-$conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
-$conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+try {
+    $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
+    $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-if (isset($_GET['del'])) {
-    $stmt = $conn->prepare("DELETE FROM tbl_users WHERE member_no = :id");
-    $stmt->bindParam(':id', $_GET['del']);
-    $stmt->execute();
-    header("location:usuarios.php");
+    // 2. ELIMINAR USUARIO
+    if (isset($_GET['del'])) {
+        $stmt = $conn->prepare("DELETE FROM tbl_users WHERE member_no = :id");
+        $stmt->bindParam(':id', $_GET['del']);
+        $stmt->execute();
+        header("location:usuarios.php");
+        exit();
+    }
+
+    // 3. OBTENER USUARIOS (Excepto admins)
+    $usuarios = $conn->query("
+        SELECT * FROM tbl_users 
+        WHERE role != 'admin' 
+        ORDER BY member_no DESC 
+        LIMIT 50
+    ")->fetchAll();
+
+} catch(PDOException $e) {
+    $error = $e->getMessage();
 }
-
-$usuarios = $conn->query("
-    SELECT * FROM tbl_users 
-    WHERE role != 'admin' 
-    ORDER BY member_no DESC 
-    LIMIT 20
-")->fetchAll();
 ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<title>Usuarios | EmpleaTec</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta charset="UTF-8">
+    <title>Usuarios | EmpleaTec</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
 
-<!-- Bootstrap -->
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;600&display=swap" rel="stylesheet">
 
-<style>
-body{
-    font-family:'Poppins',sans-serif;
-    background:#f8f9fa;
-}
+    <style>
+        /* ESTILO BASADO EN TU REFERENCIA */
+        body { 
+            font-family: 'Open Sans', sans-serif; 
+            background-color: #ffffff; 
+            margin: 0; 
+        }
 
-/* HEADER */
-.header-box{
-    background:#ffffff;
-    padding:25px 30px;
-    border-radius:18px;
-    box-shadow:0 10px 25px rgba(0,0,0,0.05);
-}
+        /* BARRA SUPERIOR NEGRA */
+        .navbar-custom {
+            background-color: #000000;
+            padding: 15px 50px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: white;
+        }
 
-/* TABLE CARD */
-.table-card{
-    background:#ffffff;
-    border-radius:20px;
-    overflow:hidden;
-    box-shadow:0 10px 30px rgba(0,0,0,0.08);
-}
+        .navbar-custom h3 { margin: 0; font-size: 1.5rem; font-weight: bold; }
+        .navbar-custom h3 span { color: #e30613; }
 
-/* TABLE */
-.table thead{
-    background:#f1f1f1;
-}
-.table th{
-    font-weight:600;
-    color:#333;
-    border-bottom:0;
-}
-.table td{
-    vertical-align:middle;
-}
+        .nav-links-top a {
+            color: #ffffff;
+            text-decoration: none;
+            text-transform: uppercase;
+            font-size: 0.85rem;
+            margin-left: 20px;
+            letter-spacing: 1px;
+            opacity: 0.8;
+        }
+        .nav-links-top a:hover { opacity: 1; }
 
-/* BADGES */
-.badge-role{
-    padding:6px 14px;
-    border-radius:20px;
-    font-size:0.75rem;
-    font-weight:600;
-}
+        /* CONTENEDOR */
+        .container-main {
+            max-width: 1200px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
 
-.role-employer{
-    background:rgba(227,6,19,0.12);
-    color:#e30613;
-}
+        .page-title {
+            font-size: 2rem;
+            color: #333;
+            margin-bottom: 5px;
+            text-transform: lowercase; /* Como en tu imagen */
+        }
 
-.role-employee{
-    background:rgba(0,0,0,0.08);
-    color:#333;
-}
+        /* TABLA MINIMALISTA */
+        .table-container {
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            overflow: hidden;
+            margin-top: 30px;
+        }
 
-/* BUTTONS */
-.btn-action{
-    width:36px;
-    height:36px;
-    display:inline-flex;
-    align-items:center;
-    justify-content:center;
-    border-radius:50%;
-    background:#f1f1f1;
-    transition:0.3s;
-}
+        .table thead {
+            background-color: #f8f9fa;
+        }
 
-.btn-action.edit{
-    color:#e30613;
-}
-.btn-action.delete{
-    color:#dc3545;
-}
+        .table th {
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 1px;
+            color: #666;
+            padding: 15px;
+            border-bottom: 1px solid #eee;
+        }
 
-.btn-action:hover{
-    background:#e30613;
-    color:#fff;
-}
+        .table td {
+            padding: 15px;
+            vertical-align: middle;
+            font-size: 0.9rem;
+            color: #444;
+            border-bottom: 1px solid #eee;
+        }
 
-/* AVATAR */
-.avatar{
-    width:42px;
-    height:42px;
-}
-</style>
+        /* BADGES */
+        .badge-role {
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .role-employer { background: #fee2e2; color: #dc2626; }
+        .role-employee { background: #f1f5f9; color: #475569; }
+
+        /* ACCIONES */
+        .btn-action {
+            color: #999;
+            margin-left: 10px;
+            transition: 0.3s;
+            text-decoration: none;
+        }
+
+        .btn-action:hover { color: #e30613; }
+        .btn-delete:hover { color: #dc3545; }
+
+        .btn-back {
+            border: 1px solid #333;
+            color: #333;
+            padding: 5px 20px;
+            border-radius: 4px;
+            text-decoration: none;
+            font-size: 0.8rem;
+            transition: 0.3s;
+        }
+
+        .btn-back:hover {
+            background: #333;
+            color: #fff;
+        }
+    </style>
 </head>
-
 <body>
 
-<div class="container py-5">
+<div class="navbar-custom">
+    <div>
+        <h3>EMPLEA<span>TEC</span></h3>
+    </div>
+    <div class="nav-links-top d-none d-md-block">
+        <a href="dashboard.php">Inicio</a>
+        <a href="usuarios.php" style="border-bottom: 2px solid #e30613;">Usuarios</a>
+        <a href="reportes.php">Reportes</a>
+        <a href="../logout.php">Cerrar sesión</a>
+    </div>
+</div>
 
-    <!-- HEADER -->
-    <div class="header-box d-flex justify-content-between align-items-center mb-4">
+<div class="container-main">
+    
+    <div class="d-flex justify-content-between align-items-end mb-4">
         <div>
-            <h4 class="fw-bold mb-1">Gestión de Usuarios</h4>
-            <p class="text-muted mb-0">Administra empresas y candidatos registrados</p>
+            <h1 class="page-title">gestión de usuarios</h1>
+            <p class="text-muted mb-0">Listado de candidatos y empresas registradas en el sistema.</p>
         </div>
-        <a href="dashboard.php" class="btn btn-outline-danger rounded-pill px-4">
-            <i class="fas fa-arrow-left me-2"></i> Dashboard
-        </a>
+        <a href="dashboard.php" class="btn-back">VOLVER AL PANEL</a>
     </div>
 
-    <!-- TABLE -->
-    <div class="table-card">
-        <table class="table table-hover mb-0">
+    <?php if(isset($error)): ?>
+        <div class="alert alert-danger"><?php echo $error; ?></div>
+    <?php endif; ?>
+
+    <div class="table-container">
+        <table class="table mb-0">
             <thead>
                 <tr>
-                    <th class="ps-4 py-3">Usuario</th>
-                    <th>Contacto</th>
-                    <th>Rol</th>
-                    <th>Ubicación</th>
-                    <th class="text-end pe-4">Acciones</th>
+                    <th>Nombre Completo</th>
+                    <th>Correo Electrónico</th>
+                    <th>Rol / Tipo</th>
+                    <th>Ciudad</th>
+                    <th class="text-end">Acciones</th>
                 </tr>
             </thead>
             <tbody>
-            <?php foreach ($usuarios as $u): ?>
+                <?php foreach ($usuarios as $u): ?>
                 <tr>
-                    <td class="ps-4">
+                    <td>
                         <div class="d-flex align-items-center">
-                            <img src="https://ui-avatars.com/api/?name=<?php echo urlencode($u['first_name']); ?>&background=e30613&color=fff"
-                                 class="rounded-circle avatar me-3">
+                            <img src="https://ui-avatars.com/api/?name=<?php echo urlencode($u['first_name']); ?>&background=f1f1f1&color=333" 
+                                 class="rounded-circle me-3" width="35">
                             <div>
-                                <div class="fw-semibold">
-                                    <?php echo $u['first_name']." ".$u['last_name']; ?>
-                                </div>
-                                <small class="text-muted">ID: <?php echo $u['member_no']; ?></small>
+                                <strong><?php echo $u['first_name']." ".$u['last_name']; ?></strong><br>
+                                <small class="text-muted"><?php echo $u['member_no']; ?></small>
                             </div>
                         </div>
                     </td>
-
                     <td><?php echo $u['email']; ?></td>
-
                     <td>
                         <span class="badge-role <?php echo $u['role']=='employer'?'role-employer':'role-employee'; ?>">
-                            <?php echo strtoupper($u['role']); ?>
+                            <?php echo $u['role'] == 'employer' ? 'Empresa' : 'Candidato'; ?>
                         </span>
                     </td>
-
                     <td>
-                        <i class="fas fa-map-marker-alt text-danger me-1"></i>
-                        <?php echo $u['city']; ?>
+                        <small><i class="fas fa-map-marker-alt text-muted me-1"></i> <?php echo $u['city'] ?: 'No definida'; ?></small>
                     </td>
-
-                    <td class="text-end pe-4">
-                        <a href="editar_usuario.php?id=<?php echo $u['member_no']; ?>"
-                           class="btn-action edit me-2" title="Editar">
-                            <i class="fas fa-edit"></i>
+                    <td class="text-end">
+                        <a href="editar_usuario.php?id=<?php echo $u['member_no']; ?>" class="btn-action" title="Editar">
+                            <i class="fas fa-pencil-alt"></i>
                         </a>
-                        <a href="usuarios.php?del=<?php echo $u['member_no']; ?>"
-                           class="btn-action delete"
-                           onclick="return confirm('¿Seguro que deseas eliminar este usuario?')"
+                        <a href="usuarios.php?del=<?php echo $u['member_no']; ?>" 
+                           class="btn-action btn-delete" 
+                           onclick="return confirm('¿Está seguro de eliminar este registro?')"
                            title="Eliminar">
-                            <i class="fas fa-trash"></i>
+                            <i class="fas fa-trash-alt"></i>
                         </a>
                     </td>
                 </tr>
-            <?php endforeach; ?>
+                <?php endforeach; ?>
             </tbody>
         </table>
     </div>
-
 </div>
 
 </body>
